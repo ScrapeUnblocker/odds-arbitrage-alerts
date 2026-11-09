@@ -1,0 +1,79 @@
+name: Odds check
+
+on:
+  schedule:
+    # Every 30 minutes, UTC. GitHub can start scheduled runs late, or drop one when busy.
+    - cron: "7,37 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run: print what would be delivered, send nothing, save nothing"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: odds-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check for the API key
+        id: gate
+        env:
+          SCRAPEUNBLOCKER_KEY: ${{ secrets.SCRAPEUNBLOCKER_KEY }}
+        run: |
+          if [ -z "$SCRAPEUNBLOCKER_KEY" ]; then
+            echo "::notice title=Not set up yet::Add the SCRAPEUNBLOCKER_KEY repository secret (Settings > Secrets and variables > Actions) to start odds checks. Nothing was checked."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v7
+        if: steps.gate.outputs.ready == 'true'
+
+      - uses: actions/setup-python@v7
+        if: steps.gate.outputs.ready == 'true'
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        if: steps.gate.outputs.ready == 'true'
+        run: python -m pip install .
+
+      # state/odds.json (reference prices, delivered arbitrages) is carried from run to
+      # run in the Actions cache: restore the newest copy, save a new one after the run.
+      - name: Restore state
+        if: steps.gate.outputs.ready == 'true'
+        uses: actions/cache/restore@v6
+        with:
+          path: state
+          key: odds-state-${{ github.run_id }}
+          restore-keys: odds-state-
+
+      - name: Check odds and deliver alerts
+        if: steps.gate.outputs.ready == 'true'
+        env:
+          SCRAPEUNBLOCKER_KEY: ${{ secrets.SCRAPEUNBLOCKER_KEY }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+          DRY_RUN_FLAG: ${{ inputs.dry_run && '--dry-run' || '' }}
+        run: odds-arbitrage-alerts run $DRY_RUN_FLAG
+
+      - name: Save state
+        if: ${{ !cancelled() && steps.gate.outputs.ready == 'true' && !inputs.dry_run }}
+        uses: actions/cache/save@v6
+        with:
+          path: state
+          key: odds-state-${{ github.run_id }}-${{ github.run_attempt }}

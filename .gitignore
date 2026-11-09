@@ -1,0 +1,26 @@
+# secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+build/
+dist/
+*.egg-info/
+
+# tool caches
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# editors / OS
+.idea/
+.vscode/
+.DS_Store
+
+# run state (in GitHub Actions it lives in the Actions cache, not in the repo)
+state/
+*.log

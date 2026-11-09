@@ -1,0 +1,60 @@
+# odds-arbitrage-alerts - the only file you need to edit.
+# Secrets (API key, webhook URLs, bot token) never go here: they come from repository
+# secrets in GitHub Actions, or from environment variables / a .env file locally.
+
+# Oddschecker sport or competition pages to watch. Paste the path after oddschecker.com/
+# or the full link. Each page is one API request per run and returns its upcoming events
+# with the best price per outcome across the bookmakers Oddschecker lists.
+pages:
+  - url: football/english/premier-league
+    name: Premier League                # optional: label used in the messages
+  - url: basketball/nba
+    name: NBA
+  - url: tennis
+    name: Tennis
+  # - url: football/champions-league
+  #   name: Champions League
+  # - url: american-football/nfl
+  #   name: NFL
+
+arbitrage:
+  enabled: true
+  # Alert when the best prices of every outcome add up to at least this much under 100%
+  # implied probability: (1 - sum of 1/odds) x 100. 0 alerts on any arbitrage at all.
+  min_arbitrage_percent: 0.5
+  # Above this it is almost always a missing outcome or a mistaken price that the
+  # bookmaker will void, so it is skipped.
+  max_arbitrage_percent: 10
+  # The stake split in the message is worked out for this total.
+  total_stake: 100
+  currency: "£"
+  # An open arbitrage is sent again only when its percentage moves by at least this
+  # many points. It is sent again from scratch if it closes and later reopens.
+  realert_change: 0.5
+
+price_moves:
+  enabled: true
+  # Alert when a best price moves at least this many percent away from the price it
+  # was first seen at (or last alerted at). +% = drifting (longer), -% = shortening.
+  min_move_percent: 10
+  # Ignore long shots: moves where both the old and new price are above this.
+  max_odds: 10
+
+# Only these markets, by name, e.g. [Match Result, Win Market]. Empty = every market
+# the page returns (Match Result for football and tennis; Win Market, Point Spread and
+# Total Points for the NBA).
+markets: []
+
+# Leave in-play events out: their prices change by the second and are often suspended.
+skip_live: true
+
+# Where alerts go. A destination is used when its secret is set and skipped otherwise:
+#   slack    -> SLACK_WEBHOOK_URL
+#   discord  -> DISCORD_WEBHOOK_URL
+#   telegram -> TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID
+#   webhook  -> ALERT_WEBHOOK_URL (JSON POST: Zapier, Make, n8n, your own endpoint)
+destinations: [slack, discord, telegram, webhook]
+
+# Reference prices and delivered arbitrages, so only new things are sent. In GitHub
+# Actions this file is carried between runs in the Actions cache.
+state_file: state/odds.json
